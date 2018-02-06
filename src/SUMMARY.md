@@ -19,5 +19,6 @@
     - [MIR construction](./mir-construction.md)
     - [MIR borrowck](./mir-borrowck.md)
     - [MIR optimizations](./mir-optimizations.md)
+- [Constant evaluation](./const-eval.md)
 - [Generating LLVM IR](./trans.md)
 - [Glossary](./glossary.md)
