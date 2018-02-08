@@ -1,8 +1,13 @@
 # Constant Evaluation
 
-Constant evaluation is the process of computing values at compile time.
+Constant evaluation is the process of computing values at compile time. For a
+specific item (constant/static/array length) this happens after the MIR for the
+item is borrow-checked and optimized. In many cases trying to const evaluate an
+item will trigger the computation of its MIR for the first time.
+
 Prominent examples are
 
+* The initializer of a `static`
 * Array length
     * needs to be known to reserve stack or heap space
 * Enum variant discriminants
