@@ -22,12 +22,12 @@ The compiler needs to figure out the length of the array before being able to
 create items that use the type (locals, constants, function arguments, ...).
 
 To obtain the (in this case empty) parameter environment, one can call
-`let param_env = tcx.param_env(def_id);`. The `GlobalId` needed is
+`let param_env = tcx.param_env(length_def_id);`. The `GlobalId` needed is
 
 ```rust
 let gid = GlobalId {
     promoted: None,
-    instance: Instance::mono(def_id),
+    instance: Instance::mono(length_def_id),
 };
 ```
 
@@ -51,8 +51,8 @@ const Foo::{{initializer}}: usize = {
 }
 ```
 
-Before the evaluation, a virtual memory location is created for storing the
-evaluation result, in this case a `vec![u8; size_of::<usize>()]`.
+Before the evaluation, a virtual memory location (in this case essentially a
+`vec![u8; 4]` or `vec![u8; 8]`) is created for storing the evaluation result.
 
 At the start of the evaluation, `_0` and `_1` are
 `Value::ByVal(PrimVal::Undef)`. When the initialization of `_1` is invoked, the
@@ -67,7 +67,7 @@ The next statement asserts that said boolean is `0`. In case the assertion
 fails, its error message is used for reporting a compile-time error.
 
 Since it does not fail, `Value::ByVal(PrimVal::Bytes(4054))` is stored in the
-virtual memory was allocated before th evaluation. `_0` always refers to that
+virtual memory was allocated before the evaluation. `_0` always refers to that
 location directly.
 
 After the evaluation is done, the virtual memory allocation is interned into the
@@ -82,9 +82,9 @@ executed in order to get at something as simple as a `usize`.
 ## Datastructures
 
 Miri's core datastructures can be found in
-https://github.com/rust-lang/rust/blob/master/src/librustc/mir/interpret . This
-is mainly the error enum and the `Value` and `PrimVal` types. A `Value` can be
-either `ByVal` (a single `PrimVal`), `ByValPair` (two `PrimVal`s, usually fat
+[librustc/mir/interpret](https://github.com/rust-lang/rust/blob/master/src/librustc/mir/interpret).
+This is mainly the error enum and the `Value` and `PrimVal` types. A `Value` can
+be either `ByVal` (a single `PrimVal`), `ByValPair` (two `PrimVal`s, usually fat
 pointers or two element tuples) or `ByRef`, which is used for anything else and
 refers to a virtual allocation. These allocations can be accessed via the
 methods on `tcx.interpret_interner`.
@@ -112,7 +112,7 @@ to a pointer to `b`.
 
 Although the main entry point to constant evaluation is the `tcx.const_eval`
 query, there are additional functions in
-https://github.com/rust-lang/rust/blob/master/src/librustc_mir/interpret/const_eval
+[librustc_mir/interpret/const_eval.rs](https://github.com/rust-lang/rust/blob/master/src/librustc_mir/interpret/const_eval.rs)
 that allow accessing the fields of a `Value` (`ByRef` or otherwise). You should
 never have to access an `Allocation` directly except for translating it to the
 compilation target (at the moment just LLVM).
@@ -123,7 +123,7 @@ function with no arguments, except that constants do not allow local (named)
 variables at the time of writing this guide.
 
 A stack frame is defined by the `Frame` type in
-https://github.com/rust-lang/rust/blob/master/src/librustc_mir/interpret/eval_context.rs
+[librustc_mir/interpret/eval_context.rs](https://github.com/rust-lang/rust/blob/master/src/librustc_mir/interpret/eval_context.rs)
 and contains all the local
 variables memory (`None` at the start of evaluation). Each frame refers to the
 evaluation of either the root constant or subsequent calls to `const fn`. The
@@ -135,7 +135,7 @@ The frames are just a `Vec<Frame>`, there's no way to actually refer to a
 memory that can be referred to are `Allocation`s.
 
 Miri now calls the `step` method (in
-https://github.com/rust-lang/rust/blob/master/src/librustc_mir/interpret/step.rs
+[librustc_mir/interpret/step.rs](https://github.com/rust-lang/rust/blob/master/src/librustc_mir/interpret/step.rs)
 ) until it either returns an error or has no further statements to execute. Each
 statement will now initialize or modify the locals or the virtual memory
 referred to by a local. This might require evaluating other constants or
