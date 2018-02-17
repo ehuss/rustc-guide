@@ -1,0 +1,290 @@
+<!DOCTYPE HTML>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Coding conventions - Guide to Rustc Development</title>
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="A guide to developing rustc ">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <base href="">
+
+        <link rel="stylesheet" href="book.css">
+        <link href="https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800" rel="stylesheet" type="text/css">
+        <link href="https://fonts.googleapis.com/css?family=Source+Code+Pro:500" rel="stylesheet" type="text/css">
+
+        <link rel="shortcut icon" href="favicon.png">
+
+        <!-- Font Awesome -->
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css">
+
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme -->
+        
+
+        
+
+        <!-- Fetch Clipboard.js from CDN but have a local fallback -->
+        <script src="https://cdn.jsdelivr.net/clipboard.js/1.6.1/clipboard.min.js"></script>
+        <script>
+            if (typeof Clipboard == 'undefined') {
+                document.write(unescape("%3Cscript src='clipboard.min.js'%3E%3C/script%3E"));
+            }
+        </script>
+
+    </head>
+    <body class="light">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { } 
+            if (theme === null || theme === undefined) { theme = 'light'; }
+            document.body.className = theme;
+            document.querySelector('html').className = theme;
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            document.querySelector('html').classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <ol class="chapter"><li><a href="about-this-guide.html"><strong aria-hidden="true">1.</strong> About this guide</a></li><li><a href="how-to-build-and-run.html"><strong aria-hidden="true">2.</strong> How to build the compiler and run what you built</a></li><li><a href="conventions.html" class="active"><strong aria-hidden="true">3.</strong> Coding conventions</a></li><li><a href="tests/intro.html"><strong aria-hidden="true">4.</strong> The compiler testing framework</a></li><li><ol class="section"><li><a href="tests/running.html"><strong aria-hidden="true">4.1.</strong> Running tests</a></li><li><a href="tests/adding.html"><strong aria-hidden="true">4.2.</strong> Adding new tests</a></li></ol></li><li><a href="walkthrough.html"><strong aria-hidden="true">5.</strong> Walkthrough: a typical contribution</a></li><li><a href="high-level-overview.html"><strong aria-hidden="true">6.</strong> High-level overview of the compiler source</a></li><li><a href="query.html"><strong aria-hidden="true">7.</strong> Queries: demand-driven compilation</a></li><li><ol class="section"><li><a href="incremental-compilation.html"><strong aria-hidden="true">7.1.</strong> Incremental compilation</a></li></ol></li><li><a href="the-parser.html"><strong aria-hidden="true">8.</strong> The parser</a></li><li><a href="macro-expansion.html"><strong aria-hidden="true">9.</strong> Macro expansion</a></li><li><a href="name-resolution.html"><strong aria-hidden="true">10.</strong> Name resolution</a></li><li><a href="hir.html"><strong aria-hidden="true">11.</strong> The HIR (High-level IR)</a></li><li><a href="ty.html"><strong aria-hidden="true">12.</strong> The ty module: representing types</a></li><li><a href="type-inference.html"><strong aria-hidden="true">13.</strong> Type inference</a></li><li><a href="trait-resolution.html"><strong aria-hidden="true">14.</strong> Trait resolution</a></li><li><a href="type-checking.html"><strong aria-hidden="true">15.</strong> Type checking</a></li><li><a href="mir.html"><strong aria-hidden="true">16.</strong> The MIR (Mid-level IR)</a></li><li><ol class="section"><li><a href="mir-construction.html"><strong aria-hidden="true">16.1.</strong> MIR construction</a></li><li><a href="mir-borrowck.html"><strong aria-hidden="true">16.2.</strong> MIR borrowck</a></li><li><a href="mir-optimizations.html"><strong aria-hidden="true">16.3.</strong> MIR optimizations</a></li></ol></li><li><a href="trans.html"><strong aria-hidden="true">17.</strong> Generating LLVM IR</a></li><li><a href="glossary.html"><strong aria-hidden="true">18.</strong> Glossary</a></li></ol>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                
+                <div id="menu-bar" class="menu-bar">
+                    <div id="menu-bar-sticky-container">
+                        <div class="left-buttons">
+                            <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-controls="sidebar">
+                                <i class="fa fa-bars"></i>
+                            </button>
+                            <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                                <i class="fa fa-paint-brush"></i>
+                            </button>
+                            <ul id="theme-list" class="theme-popup" aria-label="submenu">
+                                <li><button class="theme" id="light">Light <span class="default">(default)</span></button></li>
+                                <li><button class="theme" id="rust">Rust</button></li>
+                                <li><button class="theme" id="coal">Coal</button></li>
+                                <li><button class="theme" id="navy">Navy</button></li>
+                                <li><button class="theme" id="ayu">Ayu</button></li>
+                            </ul>
+                        </div>
+
+                        <h1 class="menu-title">Guide to Rustc Development</h1>
+
+                        <div class="right-buttons">
+                            <a href="print.html" title="Print this book">
+                                <i id="print-button" class="fa fa-print"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <p>This file offers some tips on the coding conventions for rustc.  This
+chapter covers <a href="conventions.html#formatting">formatting</a>, <a href="conventions.html#cc">coding for correctness</a>,
+<a href="conventions.html#cio">using crates from crates.io</a>, and some tips on
+<a href="conventions.html#er">structuring your PR for easy review</a>.</p>
+<p><a name=formatting></p>
+<a class="header" href="conventions.html#formatting-and-the-tidy-script" id="formatting-and-the-tidy-script"><h1>Formatting and the tidy script</h1></a>
+<p>rustc is slowly moving towards the <a href="https://github.com/rust-lang-nursery/fmt-rfcs">Rust standard coding style</a>;
+at the moment, however, it follows a rather more <em>chaotic</em> style.  We
+do have some mandatory formatting conventions, which are automatically
+enforced by a script we affectionately call the &quot;tidy&quot; script.  The
+tidy script runs automatically when you do <code>./x.py test</code>.</p>
+<p><a name=copyright></p>
+<a class="header" href="conventions.html#copyright-notice" id="copyright-notice"><h3>Copyright notice</h3></a>
+<p>All files must begin with the following copyright notice:</p>
+<pre><code>// Copyright 2012-2013 The Rust Project Developers. See the COPYRIGHT
+// file at the top-level directory of this distribution and at
+// http://rust-lang.org/COPYRIGHT.
+//
+// Licensed under the Apache License, Version 2.0 &lt;LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0&gt; or the MIT license
+// &lt;LICENSE-MIT or http://opensource.org/licenses/MIT&gt;, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+</code></pre>
+<p>The year at the top is not meaningful: copyright protections are in
+fact automatic from the moment of authorship. We do not typically edit
+the years on existing files. When creating a new file, you can use the
+current year if you like, but you don't have to.</p>
+<a class="header" href="conventions.html#line-length" id="line-length"><h2>Line length</h2></a>
+<p>Lines should be at most 100 characters. It's even better if you can
+keep things to 80.</p>
+<p><strong>Ignoring the line length limit.</strong> Sometimes -- in particular for
+tests -- it can be necessary to exempt yourself from this limit. In
+that case, you can add a comment towards the top of the file (after
+the copyright notice) like so:</p>
+<pre><code>// ignore-tidy-linelength
+</code></pre>
+<a class="header" href="conventions.html#tabs-vs-spaces" id="tabs-vs-spaces"><h2>Tabs vs spaces</h2></a>
+<p>Prefer 4-space indent.</p>
+<p><a name=cc></p>
+<a class="header" href="conventions.html#coding-for-correctness" id="coding-for-correctness"><h1>Coding for correctness</h1></a>
+<p>Beyond formatting, there are a few other tips that are worth
+following.</p>
+<a class="header" href="conventions.html#prefer-exhaustive-matches" id="prefer-exhaustive-matches"><h2>Prefer exhaustive matches</h2></a>
+<p>Using <code>_</code> in a match is convenient, but it means that when new
+variants are added to the enum, they may not get handled correctly.
+Ask yourself: if a new variant were added to this enum, what's the
+chance that it would want to use the <code>_</code> code, versus having some
+other treatment?  Unless the answer is &quot;low&quot;, then prefer an
+exhaustive match. (The same advice applies to <code>if let</code> and <code>while let</code>, which are effectively tests for a single variant.)</p>
+<a class="header" href="conventions.html#use-todo-comments-for-things-you-dont-want-to-forget" id="use-todo-comments-for-things-you-dont-want-to-forget"><h2>Use &quot;TODO&quot; comments for things you don't want to forget</h2></a>
+<p>As a useful tool to yourself, you can insert a <code>// TODO</code> comment
+for something that you want to get back to before you land your PR:</p>
+<pre><code class="language-rust ignore">fn do_something() {
+    if something_else {
+        unimplemented!(): // TODO write this
+    }
+}
+</code></pre>
+<p>The tidy script will report an error for a <code>// TODO</code> comment, so this
+code would not be able to land until the TODO is fixed (or removed).</p>
+<p>This can also be useful in a PR as a way to signal from one commit that you are
+leaving a bug that a later commit will fix:</p>
+<pre><code class="language-rust ignore">if foo {
+    return true; // TODO wrong, but will be fixed in a later commit
+}
+</code></pre>
+<p><a name=cio></p>
+<a class="header" href="conventions.html#using-crates-from-cratesio" id="using-crates-from-cratesio"><h1>Using crates from crates.io</h1></a>
+<p>It is allowed to use crates from crates.io, though external
+dependencies should not be added gratuitously. All such crates must
+have a suitably permissive license. There is an automatic check which
+inspects the Cargo metadata to ensure this.</p>
+<p><a name=er></p>
+<a class="header" href="conventions.html#how-to-structure-your-pr" id="how-to-structure-your-pr"><h1>How to structure your PR</h1></a>
+<p>How you prepare the commits in your PR can make a big difference for the reviewer.
+Here are some tips.</p>
+<p><strong>Isolate &quot;pure refactorings&quot; into their own commit.</strong> For example, if
+you rename a method, then put that rename into its own commit, along
+with the renames of all the uses.</p>
+<p><strong>More commits is usually better.</strong> If you are doing a large change,
+it's almost always better to break it up into smaller steps that can
+be independently understood. The one thing to be aware of is that if
+you introduce some code following one strategy, then change it
+dramatically (versus adding to it) in a later commit, that
+'back-and-forth' can be confusing.</p>
+<p><strong>If you run rustfmt and the file was not already formatted, isolate
+that into its own commit.</strong> This is really the same as the previous
+rule, but it's worth highlighting. It's ok to rustfmt files, but since
+we do not currently run rustfmt all the time, that can introduce a lot
+of noise into your commit. Please isolate that into its own
+commit. This also makes rebases a lot less painful, since rustfmt
+tends to cause a lot of merge conflicts, and having those isolated
+into their own commit makes htem easier to resolve.</p>
+<p><strong>No merges.</strong> We do not allow merge commits into our history, other
+than those by bors. If you get a merge conflict, rebase instead via a
+command like <code>git rebase -i rust-lang/master</code> (presuming you use the
+name <code>rust-lang</code> for your remote).</p>
+<p><strong>Individual commits do not have to build (but it's nice).</strong> We do not
+require that every intermediate commit successfully builds -- we only
+expect to be able to bisect at a PR level. However, if you <em>can</em> make
+individual commits build, that is always helpful.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                        
+                            <a rel="prev" href="how-to-build-and-run.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+                        
+
+                        
+                            <a rel="next" href="tests/intro.html" class="mobile-nav-chapters next" title="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                
+                    <a href="how-to-build-and-run.html" class="nav-chapters previous" title="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+                
+
+                
+                    <a href="tests/intro.html" class="nav-chapters next" title="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+                
+            </nav>
+
+        </div>
+
+
+        <!-- Local fallback for Font Awesome -->
+        <script>
+            if (getComputedStyle(document.querySelector(".fa")).fontFamily !== "FontAwesome") {
+                var link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.type = 'text/css';
+                link.href = '_FontAwesome/css/font-awesome.css';
+                document.head.insertBefore(link, document.head.firstChild)
+            }
+        </script>
+
+        
+
+        
+
+        
+
+        
+
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS script -->
+        
+
+    </body>
+</html>

@@ -1,0 +1,622 @@
+<!DOCTYPE HTML>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Trait resolution - Guide to Rustc Development</title>
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="A guide to developing rustc ">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <base href="">
+
+        <link rel="stylesheet" href="book.css">
+        <link href="https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800" rel="stylesheet" type="text/css">
+        <link href="https://fonts.googleapis.com/css?family=Source+Code+Pro:500" rel="stylesheet" type="text/css">
+
+        <link rel="shortcut icon" href="favicon.png">
+
+        <!-- Font Awesome -->
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css">
+
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme -->
+        
+
+        
+
+        <!-- Fetch Clipboard.js from CDN but have a local fallback -->
+        <script src="https://cdn.jsdelivr.net/clipboard.js/1.6.1/clipboard.min.js"></script>
+        <script>
+            if (typeof Clipboard == 'undefined') {
+                document.write(unescape("%3Cscript src='clipboard.min.js'%3E%3C/script%3E"));
+            }
+        </script>
+
+    </head>
+    <body class="light">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { } 
+            if (theme === null || theme === undefined) { theme = 'light'; }
+            document.body.className = theme;
+            document.querySelector('html').className = theme;
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            document.querySelector('html').classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <ol class="chapter"><li><a href="about-this-guide.html"><strong aria-hidden="true">1.</strong> About this guide</a></li><li><a href="how-to-build-and-run.html"><strong aria-hidden="true">2.</strong> How to build the compiler and run what you built</a></li><li><a href="conventions.html"><strong aria-hidden="true">3.</strong> Coding conventions</a></li><li><a href="tests/intro.html"><strong aria-hidden="true">4.</strong> The compiler testing framework</a></li><li><ol class="section"><li><a href="tests/running.html"><strong aria-hidden="true">4.1.</strong> Running tests</a></li><li><a href="tests/adding.html"><strong aria-hidden="true">4.2.</strong> Adding new tests</a></li></ol></li><li><a href="walkthrough.html"><strong aria-hidden="true">5.</strong> Walkthrough: a typical contribution</a></li><li><a href="high-level-overview.html"><strong aria-hidden="true">6.</strong> High-level overview of the compiler source</a></li><li><a href="query.html"><strong aria-hidden="true">7.</strong> Queries: demand-driven compilation</a></li><li><ol class="section"><li><a href="incremental-compilation.html"><strong aria-hidden="true">7.1.</strong> Incremental compilation</a></li></ol></li><li><a href="the-parser.html"><strong aria-hidden="true">8.</strong> The parser</a></li><li><a href="macro-expansion.html"><strong aria-hidden="true">9.</strong> Macro expansion</a></li><li><a href="name-resolution.html"><strong aria-hidden="true">10.</strong> Name resolution</a></li><li><a href="hir.html"><strong aria-hidden="true">11.</strong> The HIR (High-level IR)</a></li><li><a href="ty.html"><strong aria-hidden="true">12.</strong> The ty module: representing types</a></li><li><a href="type-inference.html"><strong aria-hidden="true">13.</strong> Type inference</a></li><li><a href="trait-resolution.html" class="active"><strong aria-hidden="true">14.</strong> Trait resolution</a></li><li><a href="type-checking.html"><strong aria-hidden="true">15.</strong> Type checking</a></li><li><a href="mir.html"><strong aria-hidden="true">16.</strong> The MIR (Mid-level IR)</a></li><li><ol class="section"><li><a href="mir-construction.html"><strong aria-hidden="true">16.1.</strong> MIR construction</a></li><li><a href="mir-borrowck.html"><strong aria-hidden="true">16.2.</strong> MIR borrowck</a></li><li><a href="mir-optimizations.html"><strong aria-hidden="true">16.3.</strong> MIR optimizations</a></li></ol></li><li><a href="trans.html"><strong aria-hidden="true">17.</strong> Generating LLVM IR</a></li><li><a href="glossary.html"><strong aria-hidden="true">18.</strong> Glossary</a></li></ol>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                
+                <div id="menu-bar" class="menu-bar">
+                    <div id="menu-bar-sticky-container">
+                        <div class="left-buttons">
+                            <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-controls="sidebar">
+                                <i class="fa fa-bars"></i>
+                            </button>
+                            <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                                <i class="fa fa-paint-brush"></i>
+                            </button>
+                            <ul id="theme-list" class="theme-popup" aria-label="submenu">
+                                <li><button class="theme" id="light">Light <span class="default">(default)</span></button></li>
+                                <li><button class="theme" id="rust">Rust</button></li>
+                                <li><button class="theme" id="coal">Coal</button></li>
+                                <li><button class="theme" id="navy">Navy</button></li>
+                                <li><button class="theme" id="ayu">Ayu</button></li>
+                            </ul>
+                        </div>
+
+                        <h1 class="menu-title">Guide to Rustc Development</h1>
+
+                        <div class="right-buttons">
+                            <a href="print.html" title="Print this book">
+                                <i id="print-button" class="fa fa-print"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <a class="header" href="trait-resolution.html#trait-resolution" id="trait-resolution"><h1>Trait resolution</h1></a>
+<p>This document describes the general process and points out some non-obvious
+things.</p>
+<p><strong>WARNING:</strong> This material was moved verbatim from a rustc README, so
+it may not &quot;fit&quot; the style of the guide until it is adapted.</p>
+<a class="header" href="trait-resolution.html#major-concepts" id="major-concepts"><h2>Major concepts</h2></a>
+<p>Trait resolution is the process of pairing up an impl with each
+reference to a trait. So, for example, if there is a generic function like:</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+fn clone_slice&lt;T:Clone&gt;(x: &amp;[T]) -&gt; Vec&lt;T&gt; { /*...*/ }
+#}</code></pre></pre>
+<p>and then a call to that function:</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+let v: Vec&lt;isize&gt; = clone_slice(&amp;[1, 2, 3])
+#}</code></pre></pre>
+<p>it is the job of trait resolution to figure out (in which case)
+whether there exists an impl of <code>isize : Clone</code></p>
+<p>Note that in some cases, like generic functions, we may not be able to
+find a specific impl, but we can figure out that the caller must
+provide an impl. To see what I mean, consider the body of <code>clone_slice</code>:</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+fn clone_slice&lt;T:Clone&gt;(x: &amp;[T]) -&gt; Vec&lt;T&gt; {
+    let mut v = Vec::new();
+    for e in &amp;x {
+        v.push((*e).clone()); // (*)
+    }
+}
+#}</code></pre></pre>
+<p>The line marked <code>(*)</code> is only legal if <code>T</code> (the type of <code>*e</code>)
+implements the <code>Clone</code> trait. Naturally, since we don't know what <code>T</code>
+is, we can't find the specific impl; but based on the bound <code>T:Clone</code>,
+we can say that there exists an impl which the caller must provide.</p>
+<p>We use the term <em>obligation</em> to refer to a trait reference in need of
+an impl.</p>
+<a class="header" href="trait-resolution.html#overview" id="overview"><h2>Overview</h2></a>
+<p>Trait resolution consists of three major parts:</p>
+<ul>
+<li>
+<p>SELECTION: Deciding how to resolve a specific obligation. For
+example, selection might decide that a specific obligation can be
+resolved by employing an impl which matches the self type, or by
+using a parameter bound. In the case of an impl, Selecting one
+obligation can create <em>nested obligations</em> because of where clauses
+on the impl itself. It may also require evaluating those nested
+obligations to resolve ambiguities.</p>
+</li>
+<li>
+<p>FULFILLMENT: The fulfillment code is what tracks that obligations
+are completely fulfilled. Basically it is a worklist of obligations
+to be selected: once selection is successful, the obligation is
+removed from the worklist and any nested obligations are enqueued.</p>
+</li>
+<li>
+<p>COHERENCE: The coherence checks are intended to ensure that there
+are never overlapping impls, where two impls could be used with
+equal precedence.</p>
+</li>
+</ul>
+<a class="header" href="trait-resolution.html#selection" id="selection"><h2>Selection</h2></a>
+<p>Selection is the process of deciding whether an obligation can be
+resolved and, if so, how it is to be resolved (via impl, where clause, etc).
+The main interface is the <code>select()</code> function, which takes an obligation
+and returns a <code>SelectionResult</code>. There are three possible outcomes:</p>
+<ul>
+<li>
+<p><code>Ok(Some(selection))</code> – yes, the obligation can be resolved, and
+<code>selection</code> indicates how. If the impl was resolved via an impl,
+then <code>selection</code> may also indicate nested obligations that are required
+by the impl.</p>
+</li>
+<li>
+<p><code>Ok(None)</code> – we are not yet sure whether the obligation can be
+resolved or not. This happens most commonly when the obligation
+contains unbound type variables.</p>
+</li>
+<li>
+<p><code>Err(err)</code> – the obligation definitely cannot be resolved due to a
+type error, or because there are no impls that could possibly apply,
+etc.</p>
+</li>
+</ul>
+<p>The basic algorithm for selection is broken into two big phases:
+candidate assembly and confirmation.</p>
+<a class="header" href="trait-resolution.html#candidate-assembly" id="candidate-assembly"><h3>Candidate assembly</h3></a>
+<p>Searches for impls/where-clauses/etc that might
+possibly be used to satisfy the obligation. Each of those is called
+a candidate. To avoid ambiguity, we want to find exactly one
+candidate that is definitively applicable. In some cases, we may not
+know whether an impl/where-clause applies or not – this occurs when
+the obligation contains unbound inference variables.</p>
+<p>The basic idea for candidate assembly is to do a first pass in which
+we identify all possible candidates. During this pass, all that we do
+is try and unify the type parameters. (In particular, we ignore any
+nested where clauses.) Presuming that this unification succeeds, the
+impl is added as a candidate.</p>
+<p>Once this first pass is done, we can examine the set of candidates. If
+it is a singleton set, then we are done: this is the only impl in
+scope that could possibly apply. Otherwise, we can winnow down the set
+of candidates by using where clauses and other conditions. If this
+reduced set yields a single, unambiguous entry, we're good to go,
+otherwise the result is considered ambiguous.</p>
+<a class="header" href="trait-resolution.html#the-basic-process-inferring-based-on-the-impls-we-see" id="the-basic-process-inferring-based-on-the-impls-we-see"><h4>The basic process: Inferring based on the impls we see</h4></a>
+<p>This process is easier if we work through some examples. Consider
+the following trait:</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+trait Convert&lt;Target&gt; {
+    fn convert(&amp;self) -&gt; Target;
+}
+#}</code></pre></pre>
+<p>This trait just has one method. It's about as simple as it gets. It
+converts from the (implicit) <code>Self</code> type to the <code>Target</code> type. If we
+wanted to permit conversion between <code>isize</code> and <code>usize</code>, we might
+implement <code>Convert</code> like so:</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+impl Convert&lt;usize&gt; for isize { /*...*/ } // isize -&gt; usize
+impl Convert&lt;isize&gt; for usize { /*...*/ } // usize -&gt; isize
+#}</code></pre></pre>
+<p>Now imagine there is some code like the following:</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+let x: isize = ...;
+let y = x.convert();
+#}</code></pre></pre>
+<p>The call to convert will generate a trait reference <code>Convert&lt;$Y&gt; for isize</code>, where <code>$Y</code> is the type variable representing the type of
+<code>y</code>. When we match this against the two impls we can see, we will find
+that only one remains: <code>Convert&lt;usize&gt; for isize</code>. Therefore, we can
+select this impl, which will cause the type of <code>$Y</code> to be unified to
+<code>usize</code>. (Note that while assembling candidates, we do the initial
+unifications in a transaction, so that they don't affect one another.)</p>
+<p>There are tests to this effect in src/test/run-pass:</p>
+<p>traits-multidispatch-infer-convert-source-and-target.rs
+traits-multidispatch-infer-convert-target.rs</p>
+<a class="header" href="trait-resolution.html#winnowing-resolving-ambiguities" id="winnowing-resolving-ambiguities"><h4>Winnowing: Resolving ambiguities</h4></a>
+<p>But what happens if there are multiple impls where all the types
+unify? Consider this example:</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+trait Get {
+    fn get(&amp;self) -&gt; Self;
+}
+
+impl&lt;T:Copy&gt; Get for T {
+    fn get(&amp;self) -&gt; T { *self }
+}
+
+impl&lt;T:Get&gt; Get for Box&lt;T&gt; {
+    fn get(&amp;self) -&gt; Box&lt;T&gt; { box get_it(&amp;**self) }
+}
+#}</code></pre></pre>
+<p>What happens when we invoke <code>get_it(&amp;box 1_u16)</code>, for example? In this
+case, the <code>Self</code> type is <code>Box&lt;u16&gt;</code> – that unifies with both impls,
+because the first applies to all types, and the second to all
+boxes. In the olden days we'd have called this ambiguous. But what we
+do now is do a second <em>winnowing</em> pass that considers where clauses
+and attempts to remove candidates – in this case, the first impl only
+applies if <code>Box&lt;u16&gt; : Copy</code>, which doesn't hold. After winnowing,
+then, we are left with just one candidate, so we can proceed. There is
+a test of this in <code>src/test/run-pass/traits-conditional-dispatch.rs</code>.</p>
+<a class="header" href="trait-resolution.html#matching" id="matching"><h4>Matching</h4></a>
+<p>The subroutines that decide whether a particular impl/where-clause/etc
+applies to a particular obligation. At the moment, this amounts to
+unifying the self types, but in the future we may also recursively
+consider some of the nested obligations, in the case of an impl.</p>
+<a class="header" href="trait-resolution.html#lifetimes-and-selection" id="lifetimes-and-selection"><h4>Lifetimes and selection</h4></a>
+<p>Because of how that lifetime inference works, it is not possible to
+give back immediate feedback as to whether a unification or subtype
+relationship between lifetimes holds or not. Therefore, lifetime
+matching is <em>not</em> considered during selection. This is reflected in
+the fact that subregion assignment is infallible. This may yield
+lifetime constraints that will later be found to be in error (in
+contrast, the non-lifetime-constraints have already been checked
+during selection and can never cause an error, though naturally they
+may lead to other errors downstream).</p>
+<a class="header" href="trait-resolution.html#where-clauses" id="where-clauses"><h4>Where clauses</h4></a>
+<p>Besides an impl, the other major way to resolve an obligation is via a
+where clause. The selection process is always given a <em>parameter
+environment</em> which contains a list of where clauses, which are
+basically obligations that can assume are satisfiable. We will iterate
+over that list and check whether our current obligation can be found
+in that list, and if so it is considered satisfied. More precisely, we
+want to check whether there is a where-clause obligation that is for
+the same trait (or some subtrait) and for which the self types match,
+using the definition of <em>matching</em> given above.</p>
+<p>Consider this simple example:</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+trait A1 { /*...*/ }
+trait A2 : A1 { /*...*/ }
+
+trait B { /*...*/ }
+
+fn foo&lt;X:A2+B&gt; { /*...*/ }
+#}</code></pre></pre>
+<p>Clearly we can use methods offered by <code>A1</code>, <code>A2</code>, or <code>B</code> within the
+body of <code>foo</code>. In each case, that will incur an obligation like <code>X : A1</code> or <code>X : A2</code>. The parameter environment will contain two
+where-clauses, <code>X : A2</code> and <code>X : B</code>. For each obligation, then, we
+search this list of where-clauses.  To resolve an obligation <code>X:A1</code>,
+we would note that <code>X:A2</code> implies that <code>X:A1</code>.</p>
+<a class="header" href="trait-resolution.html#confirmation" id="confirmation"><h3>Confirmation</h3></a>
+<p>Confirmation unifies the output type parameters of the trait with the
+values found in the obligation, possibly yielding a type error.  If we
+return to our example of the <code>Convert</code> trait from the previous
+section, confirmation is where an error would be reported, because the
+impl specified that <code>T</code> would be <code>usize</code>, but the obligation reported
+<code>char</code>. Hence the result of selection would be an error.</p>
+<a class="header" href="trait-resolution.html#selection-during-translation" id="selection-during-translation"><h3>Selection during translation</h3></a>
+<p>During type checking, we do not store the results of trait selection.
+We simply wish to verify that trait selection will succeed. Then
+later, at trans time, when we have all concrete types available, we
+can repeat the trait selection.  In this case, we do not consider any
+where-clauses to be in scope. We know that therefore each resolution
+will resolve to a particular impl.</p>
+<p>One interesting twist has to do with nested obligations. In general, in trans,
+we only need to do a &quot;shallow&quot; selection for an obligation. That is, we wish to
+identify which impl applies, but we do not (yet) need to decide how to select
+any nested obligations. Nonetheless, we <em>do</em> currently do a complete resolution,
+and that is because it can sometimes inform the results of type inference. That is,
+we do not have the full substitutions in terms of the type variables of the impl available
+to us, so we must run trait selection to figure everything out.</p>
+<p>Here is an example:</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+trait Foo { /*...*/ }
+impl&lt;U,T:Bar&lt;U&gt;&gt; Foo for Vec&lt;T&gt; { /*...*/ }
+
+impl Bar&lt;usize&gt; for isize { /*...*/ }
+#}</code></pre></pre>
+<p>After one shallow round of selection for an obligation like <code>Vec&lt;isize&gt; : Foo</code>, we would know which impl we want, and we would know that
+<code>T=isize</code>, but we do not know the type of <code>U</code>.  We must select the
+nested obligation <code>isize : Bar&lt;U&gt;</code> to find out that <code>U=usize</code>.</p>
+<p>It would be good to only do <em>just as much</em> nested resolution as
+necessary. Currently, though, we just do a full resolution.</p>
+<a class="header" href="trait-resolution.html#higher-ranked-trait-bounds" id="higher-ranked-trait-bounds"><h1>Higher-ranked trait bounds</h1></a>
+<p>One of the more subtle concepts at work are <em>higher-ranked trait
+bounds</em>. An example of such a bound is <code>for&lt;'a&gt; MyTrait&lt;&amp;'a isize&gt;</code>.
+Let's walk through how selection on higher-ranked trait references
+works.</p>
+<a class="header" href="trait-resolution.html#basic-matching-and-skolemization-leaks" id="basic-matching-and-skolemization-leaks"><h2>Basic matching and skolemization leaks</h2></a>
+<p>Let's walk through the test <code>compile-fail/hrtb-just-for-static.rs</code> to see
+how it works. The test starts with the trait <code>Foo</code>:</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+trait Foo&lt;X&gt; {
+    fn foo(&amp;self, x: X) { }
+}
+#}</code></pre></pre>
+<p>Let's say we have a function <code>want_hrtb</code> that wants a type which
+implements <code>Foo&lt;&amp;'a isize&gt;</code> for any <code>'a</code>:</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+fn want_hrtb&lt;T&gt;() where T : for&lt;'a&gt; Foo&lt;&amp;'a isize&gt; { ... }
+#}</code></pre></pre>
+<p>Now we have a struct <code>AnyInt</code> that implements <code>Foo&lt;&amp;'a isize&gt;</code> for any
+<code>'a</code>:</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+struct AnyInt;
+impl&lt;'a&gt; Foo&lt;&amp;'a isize&gt; for AnyInt { }
+#}</code></pre></pre>
+<p>And the question is, does <code>AnyInt : for&lt;'a&gt; Foo&lt;&amp;'a isize&gt;</code>? We want the
+answer to be yes. The algorithm for figuring it out is closely related
+to the subtyping for higher-ranked types (which is described in
+<code>middle::infer::higher_ranked::doc</code>, but also in a <a href="http://research.microsoft.com/en-us/um/people/simonpj/papers/higher-rank/">paper by SPJ</a> that
+I recommend you read).</p>
+<ol>
+<li>Skolemize the obligation.</li>
+<li>Match the impl against the skolemized obligation.</li>
+<li>Check for skolemization leaks.</li>
+</ol>
+<p>So let's work through our example. The first thing we would do is to
+skolemize the obligation, yielding <code>AnyInt : Foo&lt;&amp;'0 isize&gt;</code> (here <code>'0</code>
+represents skolemized region #0). Note that now have no quantifiers;
+in terms of the compiler type, this changes from a <code>ty::PolyTraitRef</code>
+to a <code>TraitRef</code>. We would then create the <code>TraitRef</code> from the impl,
+using fresh variables for it's bound regions (and thus getting
+<code>Foo&lt;&amp;'$a isize&gt;</code>, where <code>'$a</code> is the inference variable for <code>'a</code>). Next
+we relate the two trait refs, yielding a graph with the constraint
+that <code>'0 == '$a</code>. Finally, we check for skolemization &quot;leaks&quot; – a
+leak is basically any attempt to relate a skolemized region to another
+skolemized region, or to any region that pre-existed the impl match.
+The leak check is done by searching from the skolemized region to find
+the set of regions that it is related to in any way. This is called
+the &quot;taint&quot; set. To pass the check, that set must consist <em>solely</em> of
+itself and region variables from the impl. If the taint set includes
+any other region, then the match is a failure. In this case, the taint
+set for <code>'0</code> is <code>{'0, '$a}</code>, and hence the check will succeed.</p>
+<p>Let's consider a failure case. Imagine we also have a struct</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+struct StaticInt;
+impl Foo&lt;&amp;'static isize&gt; for StaticInt;
+#}</code></pre></pre>
+<p>We want the obligation <code>StaticInt : for&lt;'a&gt; Foo&lt;&amp;'a isize&gt;</code> to be
+considered unsatisfied. The check begins just as before. <code>'a</code> is
+skolemized to <code>'0</code> and the impl trait reference is instantiated to
+<code>Foo&lt;&amp;'static isize&gt;</code>. When we relate those two, we get a constraint
+like <code>'static == '0</code>. This means that the taint set for <code>'0</code> is <code>{'0, 'static}</code>, which fails the leak check.</p>
+<a class="header" href="trait-resolution.html#higher-ranked-trait-obligations" id="higher-ranked-trait-obligations"><h2>Higher-ranked trait obligations</h2></a>
+<p>Once the basic matching is done, we get to another interesting topic:
+how to deal with impl obligations. I'll work through a simple example
+here. Imagine we have the traits <code>Foo</code> and <code>Bar</code> and an associated impl:</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+trait Foo&lt;X&gt; {
+    fn foo(&amp;self, x: X) { }
+}
+
+trait Bar&lt;X&gt; {
+    fn bar(&amp;self, x: X) { }
+}
+
+impl&lt;X,F&gt; Foo&lt;X&gt; for F
+    where F : Bar&lt;X&gt;
+{
+}
+#}</code></pre></pre>
+<p>Now let's say we have a obligation <code>for&lt;'a&gt; Foo&lt;&amp;'a isize&gt;</code> and we match
+this impl. What obligation is generated as a result? We want to get
+<code>for&lt;'a&gt; Bar&lt;&amp;'a isize&gt;</code>, but how does that happen?</p>
+<p>After the matching, we are in a position where we have a skolemized
+substitution like <code>X =&gt; &amp;'0 isize</code>. If we apply this substitution to the
+impl obligations, we get <code>F : Bar&lt;&amp;'0 isize&gt;</code>. Obviously this is not
+directly usable because the skolemized region <code>'0</code> cannot leak out of
+our computation.</p>
+<p>What we do is to create an inverse mapping from the taint set of <code>'0</code>
+back to the original bound region (<code>'a</code>, here) that <code>'0</code> resulted
+from. (This is done in <code>higher_ranked::plug_leaks</code>). We know that the
+leak check passed, so this taint set consists solely of the skolemized
+region itself plus various intermediate region variables. We then walk
+the trait-reference and convert every region in that taint set back to
+a late-bound region, so in this case we'd wind up with <code>for&lt;'a&gt; F : Bar&lt;&amp;'a isize&gt;</code>.</p>
+<a class="header" href="trait-resolution.html#caching-and-subtle-considerations-therewith" id="caching-and-subtle-considerations-therewith"><h1>Caching and subtle considerations therewith</h1></a>
+<p>In general we attempt to cache the results of trait selection.  This
+is a somewhat complex process. Part of the reason for this is that we
+want to be able to cache results even when all the types in the trait
+reference are not fully known. In that case, it may happen that the
+trait selection process is also influencing type variables, so we have
+to be able to not only cache the <em>result</em> of the selection process,
+but <em>replay</em> its effects on the type variables.</p>
+<a class="header" href="trait-resolution.html#an-example" id="an-example"><h2>An example</h2></a>
+<p>The high-level idea of how the cache works is that we first replace
+all unbound inference variables with skolemized versions. Therefore,
+if we had a trait reference <code>usize : Foo&lt;$1&gt;</code>, where <code>$n</code> is an unbound
+inference variable, we might replace it with <code>usize : Foo&lt;%0&gt;</code>, where
+<code>%n</code> is a skolemized type. We would then look this up in the cache.
+If we found a hit, the hit would tell us the immediate next step to
+take in the selection process: i.e. apply impl #22, or apply where
+clause <code>X : Foo&lt;Y&gt;</code>. Let's say in this case there is no hit.
+Therefore, we search through impls and where clauses and so forth, and
+we come to the conclusion that the only possible impl is this one,
+with def-id 22:</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+impl Foo&lt;isize&gt; for usize { ... } // Impl #22
+#}</code></pre></pre>
+<p>We would then record in the cache <code>usize : Foo&lt;%0&gt; ==&gt; ImplCandidate(22)</code>. Next we would confirm <code>ImplCandidate(22)</code>, which
+would (as a side-effect) unify <code>$1</code> with <code>isize</code>.</p>
+<p>Now, at some later time, we might come along and see a <code>usize : Foo&lt;$3&gt;</code>.  When skolemized, this would yield <code>usize : Foo&lt;%0&gt;</code>, just as
+before, and hence the cache lookup would succeed, yielding
+<code>ImplCandidate(22)</code>. We would confirm <code>ImplCandidate(22)</code> which would
+(as a side-effect) unify <code>$3</code> with <code>isize</code>.</p>
+<a class="header" href="trait-resolution.html#where-clauses-and-the-local-vs-global-cache" id="where-clauses-and-the-local-vs-global-cache"><h2>Where clauses and the local vs global cache</h2></a>
+<p>One subtle interaction is that the results of trait lookup will vary
+depending on what where clauses are in scope. Therefore, we actually
+have <em>two</em> caches, a local and a global cache. The local cache is
+attached to the <code>ParamEnv</code> and the global cache attached to the
+<code>tcx</code>. We use the local cache whenever the result might depend on the
+where clauses that are in scope. The determination of which cache to
+use is done by the method <code>pick_candidate_cache</code> in <code>select.rs</code>. At
+the moment, we use a very simple, conservative rule: if there are any
+where-clauses in scope, then we use the local cache.  We used to try
+and draw finer-grained distinctions, but that led to a serious of
+annoying and weird bugs like #22019 and #18290. This simple rule seems
+to be pretty clearly safe and also still retains a very high hit rate
+(~95% when compiling rustc).</p>
+<a class="header" href="trait-resolution.html#specialization" id="specialization"><h1>Specialization</h1></a>
+<p>Defined in the <code>specialize</code> module.</p>
+<p>The basic strategy is to build up a <em>specialization graph</em> during
+coherence checking. Insertion into the graph locates the right place
+to put an impl in the specialization hierarchy; if there is no right
+place (due to partial overlap but no containment), you get an overlap
+error. Specialization is consulted when selecting an impl (of course),
+and the graph is consulted when propagating defaults down the
+specialization hierarchy.</p>
+<p>You might expect that the specialization graph would be used during
+selection – i.e. when actually performing specialization. This is
+not done for two reasons:</p>
+<ul>
+<li>
+<p>It's merely an optimization: given a set of candidates that apply,
+we can determine the most specialized one by comparing them directly
+for specialization, rather than consulting the graph. Given that we
+also cache the results of selection, the benefit of this
+optimization is questionable.</p>
+</li>
+<li>
+<p>To build the specialization graph in the first place, we need to use
+selection (because we need to determine whether one impl specializes
+another). Dealing with this reentrancy would require some additional
+mode switch for selection. Given that there seems to be no strong
+reason to use the graph anyway, we stick with a simpler approach in
+selection, and use the graph only for propagating default
+implementations.</p>
+</li>
+</ul>
+<p>Trait impl selection can succeed even when multiple impls can apply,
+as long as they are part of the same specialization family. In that
+case, it returns a <em>single</em> impl on success – this is the most
+specialized impl <em>known</em> to apply. However, if there are any inference
+variables in play, the returned impl may not be the actual impl we
+will use at trans time. Thus, we take special care to avoid projecting
+associated types unless either (1) the associated type does not use
+<code>default</code> and thus cannot be overridden or (2) all input types are
+known concretely.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                        
+                            <a rel="prev" href="type-inference.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+                        
+
+                        
+                            <a rel="next" href="type-checking.html" class="mobile-nav-chapters next" title="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                
+                    <a href="type-inference.html" class="nav-chapters previous" title="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+                
+
+                
+                    <a href="type-checking.html" class="nav-chapters next" title="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+                
+            </nav>
+
+        </div>
+
+
+        <!-- Local fallback for Font Awesome -->
+        <script>
+            if (getComputedStyle(document.querySelector(".fa")).fontFamily !== "FontAwesome") {
+                var link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.type = 'text/css';
+                link.href = '_FontAwesome/css/font-awesome.css';
+                document.head.insertBefore(link, document.head.firstChild)
+            }
+        </script>
+
+        
+
+        
+
+        
+
+        
+
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS script -->
+        
+
+    </body>
+</html>

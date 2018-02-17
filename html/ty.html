@@ -1,0 +1,340 @@
+<!DOCTYPE HTML>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>The ty module: representing types - Guide to Rustc Development</title>
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="A guide to developing rustc ">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <base href="">
+
+        <link rel="stylesheet" href="book.css">
+        <link href="https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800" rel="stylesheet" type="text/css">
+        <link href="https://fonts.googleapis.com/css?family=Source+Code+Pro:500" rel="stylesheet" type="text/css">
+
+        <link rel="shortcut icon" href="favicon.png">
+
+        <!-- Font Awesome -->
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css">
+
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme -->
+        
+
+        
+
+        <!-- Fetch Clipboard.js from CDN but have a local fallback -->
+        <script src="https://cdn.jsdelivr.net/clipboard.js/1.6.1/clipboard.min.js"></script>
+        <script>
+            if (typeof Clipboard == 'undefined') {
+                document.write(unescape("%3Cscript src='clipboard.min.js'%3E%3C/script%3E"));
+            }
+        </script>
+
+    </head>
+    <body class="light">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { } 
+            if (theme === null || theme === undefined) { theme = 'light'; }
+            document.body.className = theme;
+            document.querySelector('html').className = theme;
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            document.querySelector('html').classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <ol class="chapter"><li><a href="about-this-guide.html"><strong aria-hidden="true">1.</strong> About this guide</a></li><li><a href="how-to-build-and-run.html"><strong aria-hidden="true">2.</strong> How to build the compiler and run what you built</a></li><li><a href="conventions.html"><strong aria-hidden="true">3.</strong> Coding conventions</a></li><li><a href="tests/intro.html"><strong aria-hidden="true">4.</strong> The compiler testing framework</a></li><li><ol class="section"><li><a href="tests/running.html"><strong aria-hidden="true">4.1.</strong> Running tests</a></li><li><a href="tests/adding.html"><strong aria-hidden="true">4.2.</strong> Adding new tests</a></li></ol></li><li><a href="walkthrough.html"><strong aria-hidden="true">5.</strong> Walkthrough: a typical contribution</a></li><li><a href="high-level-overview.html"><strong aria-hidden="true">6.</strong> High-level overview of the compiler source</a></li><li><a href="query.html"><strong aria-hidden="true">7.</strong> Queries: demand-driven compilation</a></li><li><ol class="section"><li><a href="incremental-compilation.html"><strong aria-hidden="true">7.1.</strong> Incremental compilation</a></li></ol></li><li><a href="the-parser.html"><strong aria-hidden="true">8.</strong> The parser</a></li><li><a href="macro-expansion.html"><strong aria-hidden="true">9.</strong> Macro expansion</a></li><li><a href="name-resolution.html"><strong aria-hidden="true">10.</strong> Name resolution</a></li><li><a href="hir.html"><strong aria-hidden="true">11.</strong> The HIR (High-level IR)</a></li><li><a href="ty.html" class="active"><strong aria-hidden="true">12.</strong> The ty module: representing types</a></li><li><a href="type-inference.html"><strong aria-hidden="true">13.</strong> Type inference</a></li><li><a href="trait-resolution.html"><strong aria-hidden="true">14.</strong> Trait resolution</a></li><li><a href="type-checking.html"><strong aria-hidden="true">15.</strong> Type checking</a></li><li><a href="mir.html"><strong aria-hidden="true">16.</strong> The MIR (Mid-level IR)</a></li><li><ol class="section"><li><a href="mir-construction.html"><strong aria-hidden="true">16.1.</strong> MIR construction</a></li><li><a href="mir-borrowck.html"><strong aria-hidden="true">16.2.</strong> MIR borrowck</a></li><li><a href="mir-optimizations.html"><strong aria-hidden="true">16.3.</strong> MIR optimizations</a></li></ol></li><li><a href="trans.html"><strong aria-hidden="true">17.</strong> Generating LLVM IR</a></li><li><a href="glossary.html"><strong aria-hidden="true">18.</strong> Glossary</a></li></ol>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                
+                <div id="menu-bar" class="menu-bar">
+                    <div id="menu-bar-sticky-container">
+                        <div class="left-buttons">
+                            <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-controls="sidebar">
+                                <i class="fa fa-bars"></i>
+                            </button>
+                            <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                                <i class="fa fa-paint-brush"></i>
+                            </button>
+                            <ul id="theme-list" class="theme-popup" aria-label="submenu">
+                                <li><button class="theme" id="light">Light <span class="default">(default)</span></button></li>
+                                <li><button class="theme" id="rust">Rust</button></li>
+                                <li><button class="theme" id="coal">Coal</button></li>
+                                <li><button class="theme" id="navy">Navy</button></li>
+                                <li><button class="theme" id="ayu">Ayu</button></li>
+                            </ul>
+                        </div>
+
+                        <h1 class="menu-title">Guide to Rustc Development</h1>
+
+                        <div class="right-buttons">
+                            <a href="print.html" title="Print this book">
+                                <i id="print-button" class="fa fa-print"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <a class="header" href="ty.html#the-ty-module-representing-types" id="the-ty-module-representing-types"><h1>The <code>ty</code> module: representing types</h1></a>
+<p>The <code>ty</code> module defines how the Rust compiler represents types
+internally. It also defines the <em>typing context</em> (<code>tcx</code> or <code>TyCtxt</code>),
+which is the central data structure in the compiler.</p>
+<a class="header" href="ty.html#the-tcx-and-how-it-uses-lifetimes" id="the-tcx-and-how-it-uses-lifetimes"><h2>The tcx and how it uses lifetimes</h2></a>
+<p>The <code>tcx</code> (&quot;typing context&quot;) is the central data structure in the
+compiler. It is the context that you use to perform all manner of
+queries. The struct <code>TyCtxt</code> defines a reference to this shared context:</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+tcx: TyCtxt&lt;'a, 'gcx, 'tcx&gt;
+//          --  ----  ----
+//          |   |     |
+//          |   |     innermost arena lifetime (if any)
+//          |   &quot;global arena&quot; lifetime
+//          lifetime of this reference
+#}</code></pre></pre>
+<p>As you can see, the <code>TyCtxt</code> type takes three lifetime parameters.
+These lifetimes are perhaps the most complex thing to understand about
+the tcx. During Rust compilation, we allocate most of our memory in
+<strong>arenas</strong>, which are basically pools of memory that get freed all at
+once. When you see a reference with a lifetime like <code>'tcx</code> or <code>'gcx</code>,
+you know that it refers to arena-allocated data (or data that lives as
+long as the arenas, anyhow).</p>
+<p>We use two distinct levels of arenas. The outer level is the &quot;global
+arena&quot;. This arena lasts for the entire compilation: so anything you
+allocate in there is only freed once compilation is basically over
+(actually, when we shift to executing LLVM).</p>
+<p>To reduce peak memory usage, when we do type inference, we also use an
+inner level of arena. These arenas get thrown away once type inference
+is over. This is done because type inference generates a lot of
+&quot;throw-away&quot; types that are not particularly interesting after type
+inference completes, so keeping around those allocations would be
+wasteful.</p>
+<p>Often, we wish to write code that explicitly asserts that it is not
+taking place during inference. In that case, there is no &quot;local&quot;
+arena, and all the types that you can access are allocated in the
+global arena.  To express this, the idea is to use the same lifetime
+for the <code>'gcx</code> and <code>'tcx</code> parameters of <code>TyCtxt</code>. Just to be a touch
+confusing, we tend to use the name <code>'tcx</code> in such contexts. Here is an
+example:</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+fn not_in_inference&lt;'a, 'tcx&gt;(tcx: TyCtxt&lt;'a, 'tcx, 'tcx&gt;, def_id: DefId) {
+    //                                        ----  ----
+    //                                        Using the same lifetime here asserts
+    //                                        that the innermost arena accessible through
+    //                                        this reference *is* the global arena.
+}
+#}</code></pre></pre>
+<p>In contrast, if we want to code that can be usable during type inference, then you
+need to declare a distinct <code>'gcx</code> and <code>'tcx</code> lifetime parameter:</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+fn maybe_in_inference&lt;'a, 'gcx, 'tcx&gt;(tcx: TyCtxt&lt;'a, 'gcx, 'tcx&gt;, def_id: DefId) {
+    //                                                ----  ----
+    //                                        Using different lifetimes here means that
+    //                                        the innermost arena *may* be distinct
+    //                                        from the global arena (but doesn't have to be).
+}
+#}</code></pre></pre>
+<a class="header" href="ty.html#allocating-and-working-with-types" id="allocating-and-working-with-types"><h3>Allocating and working with types</h3></a>
+<p>Rust types are represented using the <code>Ty&lt;'tcx&gt;</code> defined in the <code>ty</code>
+module (not to be confused with the <code>Ty</code> struct from <a href="./hir.html">the HIR</a>). This
+is in fact a simple type alias for a reference with <code>'tcx</code> lifetime:</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+pub type Ty&lt;'tcx&gt; = &amp;'tcx TyS&lt;'tcx&gt;;
+#}</code></pre></pre>
+<p>You can basically ignore the <code>TyS</code> struct – you will basically never
+access it explicitly. We always pass it by reference using the
+<code>Ty&lt;'tcx&gt;</code> alias – the only exception I think is to define inherent
+methods on types. Instances of <code>TyS</code> are only ever allocated in one of
+the rustc arenas (never e.g. on the stack).</p>
+<p>One common operation on types is to <strong>match</strong> and see what kinds of
+types they are. This is done by doing <code>match ty.sty</code>, sort of like this:</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+fn test_type&lt;'tcx&gt;(ty: Ty&lt;'tcx&gt;) {
+    match ty.sty {
+        ty::TyArray(elem_ty, len) =&gt; { ... }
+        ...
+    }
+}
+#}</code></pre></pre>
+<p>The <code>sty</code> field (the origin of this name is unclear to me; perhaps
+structural type?) is of type <code>TypeVariants&lt;'tcx&gt;</code>, which is an enum
+defining all of the different kinds of types in the compiler.</p>
+<blockquote>
+<p>N.B. inspecting the <code>sty</code> field on types during type inference can be
+risky, as there may be inference variables and other things to
+consider, or sometimes types are not yet known that will become
+known later.).</p>
+</blockquote>
+<p>To allocate a new type, you can use the various <code>mk_</code> methods defined
+on the <code>tcx</code>. These have names that correpond mostly to the various kinds
+of type variants. For example:</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+let array_ty = tcx.mk_array(elem_ty, len * 2);
+#}</code></pre></pre>
+<p>These methods all return a <code>Ty&lt;'tcx&gt;</code> – note that the lifetime you
+get back is the lifetime of the innermost arena that this <code>tcx</code> has
+access to. In fact, types are always canonicalized and interned (so we
+never allocate exactly the same type twice) and are always allocated
+in the outermost arena where they can be (so, if they do not contain
+any inference variables or other &quot;temporary&quot; types, they will be
+allocated in the global arena). However, the lifetime <code>'tcx</code> is always
+a safe approximation, so that is what you get back.</p>
+<blockquote>
+<p>NB. Because types are interned, it is possible to compare them for
+equality efficiently using <code>==</code> – however, this is almost never what
+you want to do unless you happen to be hashing and looking for
+duplicates. This is because often in Rust there are multiple ways to
+represent the same type, particularly once inference is involved. If
+you are going to be testing for type equality, you probably need to
+start looking into the inference code to do it right.</p>
+</blockquote>
+<p>You can also find various common types in the <code>tcx</code> itself by accessing
+<code>tcx.types.bool</code>, <code>tcx.types.char</code>, etc (see <code>CommonTypes</code> for more).</p>
+<a class="header" href="ty.html#beyond-types-other-kinds-of-arena-allocated-data-structures" id="beyond-types-other-kinds-of-arena-allocated-data-structures"><h3>Beyond types: other kinds of arena-allocated data structures</h3></a>
+<p>In addition to types, there are a number of other arena-allocated data
+structures that you can allocate, and which are found in this
+module. Here are a few examples:</p>
+<ul>
+<li><code>Substs</code>, allocated with <code>mk_substs</code> – this will intern a slice of types, often used to
+specify the values to be substituted for generics (e.g. <code>HashMap&lt;i32, u32&gt;</code>
+would be represented as a slice <code>&amp;'tcx [tcx.types.i32, tcx.types.u32]</code>).</li>
+<li><code>TraitRef</code>, typically passed by value – a <strong>trait reference</strong>
+consists of a reference to a trait along with its various type
+parameters (including <code>Self</code>), like <code>i32: Display</code> (here, the def-id
+would reference the <code>Display</code> trait, and the substs would contain
+<code>i32</code>).</li>
+<li><code>Predicate</code> defines something the trait system has to prove (see <code>traits</code> module).</li>
+</ul>
+<a class="header" href="ty.html#import-conventions" id="import-conventions"><h3>Import conventions</h3></a>
+<p>Although there is no hard and fast rule, the <code>ty</code> module tends to be used like so:</p>
+<pre><pre class="playpen"><code class="language-rust">
+# #![allow(unused_variables)]
+#fn main() {
+use ty::{self, Ty, TyCtxt};
+#}</code></pre></pre>
+<p>In particular, since they are so common, the <code>Ty</code> and <code>TyCtxt</code> types
+are imported directly. Other types are often referenced with an
+explicit <code>ty::</code> prefix (e.g. <code>ty::TraitRef&lt;'tcx&gt;</code>). But some modules
+choose to import a larger or smaller set of names explicitly.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                        
+                            <a rel="prev" href="hir.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+                        
+
+                        
+                            <a rel="next" href="type-inference.html" class="mobile-nav-chapters next" title="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                
+                    <a href="hir.html" class="nav-chapters previous" title="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+                
+
+                
+                    <a href="type-inference.html" class="nav-chapters next" title="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+                
+            </nav>
+
+        </div>
+
+
+        <!-- Local fallback for Font Awesome -->
+        <script>
+            if (getComputedStyle(document.querySelector(".fa")).fontFamily !== "FontAwesome") {
+                var link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.type = 'text/css';
+                link.href = '_FontAwesome/css/font-awesome.css';
+                document.head.insertBefore(link, document.head.firstChild)
+            }
+        </script>
+
+        
+
+        
+
+        
+
+        
+
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS script -->
+        
+
+    </body>
+</html>
